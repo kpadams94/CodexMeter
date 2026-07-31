@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Codex Usage Widget — Throwaway Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+      --usage: 47%;
+      --accent: #a970ff;
+      --taskbar-height: 48px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 720px;
+      min-height: 520px;
+      margin: 0;
+      overflow: hidden;
+      color: #f7f7f8;
+      background:
+        radial-gradient(circle at 74% 18%, rgba(122, 98, 255, .5), transparent 36%),
+        radial-gradient(circle at 18% 82%, rgba(26, 170, 181, .38), transparent 38%),
+        linear-gradient(145deg, #101928 0%, #18243a 45%, #111722 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      opacity: .18;
+      background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 85%);
+    }
+
+    .prototype-note {
+      position: fixed;
+      top: 20px;
+      left: 22px;
+      width: 330px;
+      padding: 16px 18px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 14px;
+      color: rgba(255,255,255,.72);
+      background: rgba(13,18,28,.58);
+      box-shadow: 0 12px 34px rgba(0,0,0,.18);
+      backdrop-filter: blur(18px);
+    }
+
+    .prototype-note strong {
+      display: block;
+      margin-bottom: 6px;
+      color: white;
+      font-size: 14px;
+      letter-spacing: .02em;
+    }
+
+    .prototype-note p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .desktop-window {
+      position: fixed;
+      inset: 110px 13% 110px 19%;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px;
+      background: rgba(241,245,255,.9);
+      box-shadow: 0 28px 80px rgba(0,0,0,.28);
+      opacity: .55;
+    }
+
+    .desktop-window::before {
+      content: "";
+      display: block;
+      height: 38px;
+      border-bottom: 1px solid rgba(12,22,38,.12);
+      border-radius: 12px 12px 0 0;
+      background: rgba(255,255,255,.92);
+    }
+
+    .desktop-window::after {
+      content: "";
+      position: absolute;
+      inset: 66px 30px 28px;
+      border-radius: 8px;
+      background: repeating-linear-gradient(to bottom, rgba(31,45,65,.15) 0 9px, transparent 9px 25px);
+    }
+
+    .taskbar {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: var(--taskbar-height);
+      border-top: 1px solid rgba(255,255,255,.16);
+      background: rgba(18,25,36,.76);
+      box-shadow: 0 -10px 30px rgba(0,0,0,.12);
+      backdrop-filter: blur(24px) saturate(1.2);
+    }
+
+    .taskbar-icons {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      height: 100%;
+    }
+
+    .taskbar-icons i {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.7);
+    }
+
+    .clock {
+      position: absolute;
+      top: 8px;
+      right: 14px;
+      color: rgba(255,255,255,.8);
+      font-size: 11px;
+      text-align: right;
+      line-height: 1.35;
+    }
+
+    .widget-stage {
+      position: fixed;
+      right: 14px;
+      bottom: calc(var(--taskbar-height) + 12px);
+      z-index: 5;
+    }
+
+    .widget {
+      cursor: default;
+      user-select: none;
+      animation: appear .24s ease-out;
+    }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(8px) scale(.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .widget .tooltip {
+      visibility: hidden;
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 9px);
+      width: max-content;
+      max-width: 230px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 8px;
+      color: #eceef2;
+      background: rgba(17,20,27,.96);
+      box-shadow: 0 10px 28px rgba(0,0,0,.34);
+      font-size: 11px;
+      line-height: 1.45;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: .15s ease;
+      pointer-events: none;
+    }
+
+    .widget:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* A — calm information card */
+    .variant-a {
+      width: 143px;
+      padding: 11px 13px 12px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 16px;
+      background: rgba(24,27,34,.88);
+      box-shadow: 0 12px 30px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.06);
+      backdrop-filter: blur(22px) saturate(1.15);
+    }
+
+    .variant-a .topline {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .variant-a .value { font-size: 10px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+    .variant-a .brand { color: rgba(255,255,255,.48); font-size: 9px; font-weight: 700; letter-spacing: .12em; }
+    .variant-a .track {
+      position: relative;
+      width: 92%;
+      height: 3px;
+      margin: 0 auto;
+      border-radius: 8px;
+      background: rgba(255,255,255,.12);
+      cursor: ew-resize;
+      touch-action: none;
+    }
+    .variant-a .track::before {
+      content: "";
+      position: absolute;
+      inset: -8px 0;
+    }
+    .variant-a .track:focus-visible {
+      outline: 2px solid rgba(169,112,255,.8);
+      outline-offset: 6px;
+    }
+    .variant-a .fill {
+      width: var(--usage);
+      height: 100%;
+      overflow: hidden;
+      border-radius: inherit;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(169,112,255,.42);
+      pointer-events: none;
+    }
+
+    /* B — dense inline instrument */
+    .variant-b {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 10px;
+      width: 184px;
+      height: 40px;
+      padding: 6px 11px 6px 8px;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 22px;
+      background: rgba(238,241,246,.94);
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      color: #171a20;
+    }
+
+    .variant-b .badge {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: #fff;
+      background: #20232a;
+      font-size: 9px;
+      font-weight: 750;
+      letter-spacing: .05em;
+    }
+
+    .variant-b .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .variant-b .value { font-size: 13px; font-weight: 720; }
+    .variant-b .status { color: #777d88; font-size: 9px; }
+    .variant-b .segments { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+    .variant-b .segments i { height: 3px; border-radius: 2px; background: #d6d8dc; }
+    .variant-b .segments i.on { background: #d59327; }
+
+    /* C — visual gauge first */
+    .variant-c {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 150px;
+      padding: 8px 11px 8px 8px;
+      border: 1px solid rgba(117,235,213,.24);
+      border-radius: 10px 3px 3px 10px;
+      background: linear-gradient(120deg, rgba(11,30,33,.95), rgba(10,17,24,.95));
+      box-shadow: 0 0 0 1px rgba(0,0,0,.2), 0 12px 32px rgba(0,0,0,.34);
+    }
+
+    .variant-c .gauge {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: conic-gradient(#65d8c3 0 47%, rgba(255,255,255,.1) 47% 100%);
+      box-shadow: 0 0 16px rgba(101,216,195,.18);
+    }
+
+    .variant-c .gauge::after {
+      content: "47";
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 31px;
+      border-radius: 50%;
+      color: #dffbf6;
+      background: #0d171d;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .variant-c .eyebrow { color: #65d8c3; font-size: 8px; font-weight: 750; letter-spacing: .14em; }
+    .variant-c .label { margin-top: 2px; font-size: 13px; font-weight: 650; }
+    .variant-c .micro { margin-top: 2px; color: rgba(223,251,246,.48); font-size: 8px; }
+
+    .context-menu {
+      display: none;
+      position: fixed;
+      z-index: 20;
+      width: 142px;
+      padding: 5px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 9px;
+      background: rgba(25,28,35,.98);
+      box-shadow: 0 14px 36px rgba(0,0,0,.38);
+      font-size: 11px;
+    }
+
+    .context-menu.open { display: block; }
+    .context-menu div { padding: 7px 9px; border-radius: 5px; }
+    .context-menu div:hover { background: rgba(255,255,255,.09); }
+
+    .switcher {
+      position: fixed;
+      z-index: 10;
+      bottom: 66px;
+      left: 50%;
+      display: grid;
+      grid-template-columns: 34px minmax(210px, auto) 34px;
+      align-items: center;
+      padding: 5px;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 999px;
+      background: rgba(7,10,16,.9);
+      box-shadow: 0 15px 45px rgba(0,0,0,.35);
+      transform: translateX(-50%);
+      backdrop-filter: blur(18px);
+    }
+
+    .switcher button {
+      width: 34px;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      color: white;
+      background: transparent;
+      font-size: 17px;
+      cursor: pointer;
+    }
+
+    .switcher button:hover { background: rgba(255,255,255,.12); }
+    .variant-name { padding: 0 10px; color: rgba(255,255,255,.9); font-size: 11px; text-align: center; white-space: nowrap; }
+    .variant-name b { color: #8edcd0; }
+  </style>
+</head>
+<body>
+  <!-- Three variants of a bottom-right Codex usage widget, switchable via ?variant=A|B|C, on a throwaway standalone prototype page. -->
+  <aside class="prototype-note">
+    <strong>Throwaway visual prototype</strong>
+    <p>Question: which shape makes weekly Codex usage easiest to read without becoming distracting? Use the arrows below or your keyboard. Left-click the widget to simulate refresh; right-click for its menu.</p>
+  </aside>
+
+  <div class="desktop-window" aria-hidden="true"></div>
+  <div class="widget-stage" id="widget-stage"></div>
+
+  <div class="context-menu" id="context-menu">
+    <div id="menu-refresh">Refresh now</div>
+    <div>About Codex Usage</div>
+    <div>Exit</div>
+  </div>
+
+  <nav class="switcher" aria-label="Prototype variants">
+    <button id="previous" aria-label="Previous variant">&#8592;</button>
+    <div class="variant-name" id="variant-name"></div>
+    <button id="next" aria-label="Next variant">&#8594;</button>
+  </nav>
+
+  <div class="taskbar" aria-hidden="true">
+    <div class="taskbar-icons"><i></i><i></i><i></i></div>
+    <div class="clock">2:47 PM<br>7/31/2026</div>
+  </div>
+
+  <script>
+    const variants = [
+      { key: 'A', name: 'Quiet card' },
+      { key: 'B', name: 'Inline instrument' },
+      { key: 'C', name: 'Gauge first' }
+    ];
+
+    const templates = {
+      A: `
+        <section class="widget variant-a" aria-label="47 percent of weekly Codex usage remaining">
+          <div class="topline"><span class="value">47% left</span><span class="brand">CODEX</span></div>
+          <div class="track" role="slider" tabindex="0" aria-label="Preview remaining weekly usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="47"><div class="fill"></div></div>
+          <div class="tooltip">Last checked just now<br>Weekly allowance · fresh account check</div>
+        </section>`,
+      B: `
+        <section class="widget variant-b" aria-label="47 percent of weekly Codex usage remaining">
+          <div class="badge">CX</div>
+          <div><div class="row"><span class="value">47% left</span><span class="status">weekly</span></div>
+          <div class="segments">${Array.from({length: 10}, (_, i) => `<i class="${i < 5 ? 'on' : ''}"></i>`).join('')}</div></div>
+          <div class="tooltip">Last checked just now<br>Weekly allowance · fresh account check</div>
+        </section>`,
+      C: `
+        <section class="widget variant-c" aria-label="47 percent of weekly Codex usage remaining">
+          <div class="gauge"></div>
+          <div><div class="eyebrow">CODEX WEEKLY</div><div class="label">47% left</div><div class="micro">checked just now</div></div>
+          <div class="tooltip">Last checked just now<br>Weekly allowance · fresh account check</div>
+        </section>`
+    };
+
+    const stage = document.getElementById('widget-stage');
+    const menu = document.getElementById('context-menu');
+    let current = new URLSearchParams(location.search).get('variant')?.toUpperCase() || 'A';
+    let previewPercent = 47;
+    if (!variants.some(item => item.key === current)) current = 'A';
+
+    function render() {
+      const meta = variants.find(item => item.key === current);
+      stage.innerHTML = templates[current];
+      document.getElementById('variant-name').innerHTML = `<b>${meta.key}</b> — ${meta.name}`;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', current);
+      history.replaceState({}, '', url);
+      menu.classList.remove('open');
+
+      const widget = stage.querySelector('.widget');
+      widget.addEventListener('click', () => {
+        widget.animate([{opacity: .55}, {opacity: 1}], {duration: 280});
+      });
+      widget.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        menu.style.left = `${Math.min(event.clientX, innerWidth - 154)}px`;
+        menu.style.top = `${Math.min(event.clientY, innerHeight - 116)}px`;
+        menu.classList.add('open');
+      });
+
+      const slider = widget.querySelector('[role="slider"]');
+      if (slider) {
+        const updatePreview = value => {
+          previewPercent = Math.max(0, Math.min(100, Math.round(value)));
+          document.documentElement.style.setProperty('--usage', `${previewPercent}%`);
+          widget.querySelector('.value').textContent = `${previewPercent}% left`;
+          widget.setAttribute('aria-label', `${previewPercent} percent of weekly Codex usage remaining`);
+          slider.setAttribute('aria-valuenow', previewPercent);
+        };
+        const updateFromPointer = event => {
+          const bounds = slider.getBoundingClientRect();
+          updatePreview(((event.clientX - bounds.left) / bounds.width) * 100);
+        };
+        slider.addEventListener('pointerdown', event => {
+          event.stopPropagation();
+          slider.setPointerCapture(event.pointerId);
+          updateFromPointer(event);
+        });
+        slider.addEventListener('pointermove', event => {
+          if (slider.hasPointerCapture(event.pointerId)) updateFromPointer(event);
+        });
+        slider.addEventListener('click', event => event.stopPropagation());
+        slider.addEventListener('keydown', event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            event.stopPropagation();
+            updatePreview(previewPercent - 1);
+          }
+          if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            updatePreview(previewPercent + 1);
+          }
+          if (event.key === 'Home') updatePreview(0);
+          if (event.key === 'End') updatePreview(100);
+        });
+        updatePreview(previewPercent);
+      }
+    }
+
+    function move(direction) {
+      const index = variants.findIndex(item => item.key === current);
+      current = variants[(index + direction + variants.length) % variants.length].key;
+      render();
+    }
+
+    document.getElementById('previous').addEventListener('click', () => move(-1));
+    document.getElementById('next').addEventListener('click', () => move(1));
+    document.getElementById('menu-refresh').addEventListener('click', () => {
+      menu.classList.remove('open');
+      stage.querySelector('.widget').click();
+    });
+    document.addEventListener('click', event => {
+      if (!menu.contains(event.target)) menu.classList.remove('open');
+    });
+    document.addEventListener('keydown', event => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
+      if (event.key === 'ArrowLeft') move(-1);
+      if (event.key === 'ArrowRight') move(1);
+    });
+
+    render();
+  </script>
+</body>
+</html>
