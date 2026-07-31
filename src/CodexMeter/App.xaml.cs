@@ -13,7 +13,7 @@ public partial class App : Application
         window.Show();
 
         var adapters = new ApplicationSessionAdapters(
-            new SampleUsageSource(47),
+            new SampleUsageSource(RemainingPercentage.From(47)),
             new SystemClock(),
             new NoOpUsageStateStore(),
             new CurrentDesktopState(),

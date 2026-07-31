@@ -14,7 +14,7 @@ public partial class MainWindow : Window, IWidgetShell
 
     public void ShowChecking() => Card.ShowChecking();
 
-    public void ShowUsage(UsageState state) => Card.RemainingPercentage = state.RemainingPercentage;
+    public void ShowUsage(UsageState state) => Card.ShowUsage(state.Remaining);
 
     private void PlaceAboveTaskbar()
     {

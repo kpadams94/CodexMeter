@@ -6,24 +6,22 @@ namespace CodexMeter;
 
 public partial class QuietCard : UserControl
 {
-    private const double ProgressTrackWidth = 107;
-
-    public static readonly DependencyProperty RemainingPercentageProperty = DependencyProperty.Register(
-        nameof(RemainingPercentage),
-        typeof(int),
+    public static readonly DependencyProperty UsageProperty = DependencyProperty.Register(
+        nameof(Usage),
+        typeof(RemainingPercentage),
         typeof(QuietCard),
-        new FrameworkPropertyMetadata(47, OnRemainingPercentageChanged));
+        new FrameworkPropertyMetadata(RemainingPercentage.From(47), OnUsageChanged));
 
     public QuietCard()
     {
         InitializeComponent();
-        UpdatePresentation(RemainingPercentage);
+        UpdatePresentation(Usage);
     }
 
-    public int RemainingPercentage
+    public RemainingPercentage Usage
     {
-        get => (int)GetValue(RemainingPercentageProperty);
-        set => SetValue(RemainingPercentageProperty, value);
+        get => (RemainingPercentage)GetValue(UsageProperty);
+        set => SetValue(UsageProperty, value);
     }
 
     public void ShowChecking()
@@ -33,26 +31,25 @@ public partial class QuietCard : UserControl
         AutomationProperties.SetName(this, "Checking weekly Codex usage");
     }
 
-    private static void OnRemainingPercentageChanged(
+    public void ShowUsage(RemainingPercentage remainingPercentage)
+    {
+        SetCurrentValue(UsageProperty, remainingPercentage);
+        UpdatePresentation(remainingPercentage);
+    }
+
+    private static void OnUsageChanged(
         DependencyObject dependencyObject,
         DependencyPropertyChangedEventArgs eventArgs)
     {
         var card = (QuietCard)dependencyObject;
-        var percentage = Math.Clamp((int)eventArgs.NewValue, 0, 100);
-
-        if (percentage != (int)eventArgs.NewValue)
-        {
-            card.SetCurrentValue(RemainingPercentageProperty, percentage);
-            return;
-        }
-
-        card.UpdatePresentation(percentage);
+        card.UpdatePresentation((RemainingPercentage)eventArgs.NewValue);
     }
 
-    private void UpdatePresentation(int percentage)
+    private void UpdatePresentation(RemainingPercentage remainingPercentage)
     {
+        var percentage = remainingPercentage.Value;
         PercentageLabel.Text = $"{percentage}% left";
-        ProgressFill.Width = ProgressTrackWidth * percentage / 100d;
+        ProgressFill.Width = QuietCardMetrics.ProgressTrackWidth * percentage / 100d;
         AutomationProperties.SetName(
             this,
             $"{percentage} percent of weekly Codex usage remaining");

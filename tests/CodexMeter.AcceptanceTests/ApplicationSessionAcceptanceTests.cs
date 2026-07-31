@@ -1,29 +1,47 @@
 using CodexMeter;
+using System.Windows.Automation;
 
 namespace CodexMeter.AcceptanceTests;
 
 public sealed class ApplicationSessionAcceptanceTests
 {
     [Fact]
-    public async Task Launch_displays_usage_from_the_controlled_source()
+    public void Launch_displays_usage_from_the_controlled_source_in_the_production_window()
     {
-        var widget = new RecordingWidgetShell();
-        var adapters = new ApplicationSessionAdapters(
-            new ControlledUsageSource(47),
-            new ControlledClock(),
-            new InMemoryUsageStateStore(),
-            new ControlledDesktopState(),
-            new RecordingNotificationSink(),
-            widget);
+        StaThread.Run(() =>
+        {
+            var window = new MainWindow();
+            var stateStore = new InMemoryUsageStateStore();
+            var adapters = new ApplicationSessionAdapters(
+                new ControlledUsageSource(RemainingPercentage.From(47)),
+                new ControlledClock(),
+                stateStore,
+                new ControlledDesktopState(),
+                new RecordingNotificationSink(),
+                window);
 
-        await new ApplicationSession(adapters).StartAsync();
+            window.Show();
+            try
+            {
+                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
+                var card = Assert.IsType<QuietCard>(window.Content);
 
-        Assert.Equal(47, widget.RemainingPercentage);
+                Assert.True(window.IsVisible);
+                Assert.Equal(
+                    "47 percent of weekly Codex usage remaining",
+                    AutomationProperties.GetName(card));
+                Assert.Equal(47, Assert.Single(stateStore.SavedStates).Remaining.Value);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
-    private sealed class ControlledUsageSource(int remainingPercentage) : IUsageSource
+    private sealed class ControlledUsageSource(RemainingPercentage remainingPercentage) : IUsageSource
     {
-        public Task<int> ReadRemainingPercentageAsync(CancellationToken cancellationToken) =>
+        public Task<RemainingPercentage> ReadRemainingPercentageAsync(CancellationToken cancellationToken) =>
             Task.FromResult(remainingPercentage);
     }
 
@@ -34,7 +52,13 @@ public sealed class ApplicationSessionAcceptanceTests
 
     private sealed class InMemoryUsageStateStore : IUsageStateStore
     {
-        public Task SaveAsync(UsageState state, CancellationToken cancellationToken) => Task.CompletedTask;
+        public List<UsageState> SavedStates { get; } = [];
+
+        public Task SaveAsync(UsageState state, CancellationToken cancellationToken)
+        {
+            SavedStates.Add(state);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class ControlledDesktopState : IDesktopState
@@ -45,14 +69,5 @@ public sealed class ApplicationSessionAcceptanceTests
     private sealed class RecordingNotificationSink : INotificationSink
     {
         public void ShowReset(UsageState state) { }
-    }
-
-    private sealed class RecordingWidgetShell : IWidgetShell
-    {
-        public int? RemainingPercentage { get; private set; }
-
-        public void ShowChecking() => RemainingPercentage = null;
-
-        public void ShowUsage(UsageState state) => RemainingPercentage = state.RemainingPercentage;
     }
 }

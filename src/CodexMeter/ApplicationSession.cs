@@ -1,10 +1,22 @@
 namespace CodexMeter;
 
-public sealed record UsageState(int RemainingPercentage, DateTimeOffset CheckedAt);
+public readonly record struct RemainingPercentage
+{
+    private RemainingPercentage(int value)
+    {
+        Value = value;
+    }
+
+    public int Value { get; }
+
+    public static RemainingPercentage From(int value) => new(Math.Clamp(value, 0, 100));
+}
+
+public sealed record UsageState(RemainingPercentage Remaining, DateTimeOffset CheckedAt);
 
 public interface IUsageSource
 {
-    Task<int> ReadRemainingPercentageAsync(CancellationToken cancellationToken);
+    Task<RemainingPercentage> ReadRemainingPercentageAsync(CancellationToken cancellationToken);
 }
 
 public interface IClock
@@ -50,7 +62,7 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
 
         var remainingPercentage = await adapters.UsageSource
             .ReadRemainingPercentageAsync(cancellationToken);
-        var state = new UsageState(Math.Clamp(remainingPercentage, 0, 100), adapters.Clock.UtcNow);
+        var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
 
         await adapters.UsageStateStore.SaveAsync(state, cancellationToken);
         adapters.Widget.ShowUsage(state);

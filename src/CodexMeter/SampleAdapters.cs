@@ -1,8 +1,8 @@
 namespace CodexMeter;
 
-public sealed class SampleUsageSource(int remainingPercentage) : IUsageSource
+public sealed class SampleUsageSource(RemainingPercentage remainingPercentage) : IUsageSource
 {
-    public Task<int> ReadRemainingPercentageAsync(CancellationToken cancellationToken) =>
+    public Task<RemainingPercentage> ReadRemainingPercentageAsync(CancellationToken cancellationToken) =>
         Task.FromResult(remainingPercentage);
 }
 

@@ -1,14 +1,15 @@
 <UserControl x:Class="CodexMeter.QuietCard"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Width="143"
-             Height="49"
+             xmlns:local="clr-namespace:CodexMeter"
+             Width="{x:Static local:QuietCardMetrics.Width}"
+             Height="{x:Static local:QuietCardMetrics.Height}"
              UseLayoutRounding="True"
              SnapsToDevicePixels="True">
     <Border Background="#E0181B22"
             BorderBrush="#26FFFFFF"
             BorderThickness="1"
-            CornerRadius="16"
+            CornerRadius="{x:Static local:QuietCardMetrics.CardCornerRadius}"
             Padding="13,11,13,12">
         <Grid>
             <Grid.RowDefinitions>
@@ -44,7 +45,7 @@
             </Grid>
 
             <Border Grid.Row="2"
-                    Width="107"
+                    Width="{x:Static local:QuietCardMetrics.ProgressTrackWidth}"
                     Height="3"
                     HorizontalAlignment="Center"
                     Background="#1FFFFFFF"
