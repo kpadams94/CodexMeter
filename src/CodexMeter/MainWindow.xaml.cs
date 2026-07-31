@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Globalization;
 
 namespace CodexMeter;
 
@@ -14,9 +15,17 @@ public partial class MainWindow : Window, IWidgetShell
 
     public event Func<Task>? RefreshRequested;
 
-    public void ShowChecking() => Card.ShowChecking();
+    public void ShowChecking()
+    {
+        Card.ToolTip = null;
+        Card.ShowChecking();
+    }
 
-    public void ShowUsage(UsageState state) => Card.ShowUsage(state.Remaining);
+    public void ShowUsage(UsageState state)
+    {
+        Card.ToolTip = state.CheckedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+        Card.ShowUsage(state.Remaining);
+    }
 
     private async void OnMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
         await RaiseRefreshRequestedAsync();

@@ -41,6 +41,8 @@ public interface IClock
 
 public interface IUsageStateStore
 {
+    Task<UsageState?> LoadAsync(CancellationToken cancellationToken);
+
     Task SaveAsync(UsageState state, CancellationToken cancellationToken);
 }
 
@@ -73,8 +75,21 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
 {
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        adapters.Widget.ShowChecking();
+        await RestoreAsync(cancellationToken);
         await RefreshAsync(cancellationToken);
+    }
+
+    public async Task RestoreAsync(CancellationToken cancellationToken = default)
+    {
+        var savedState = await adapters.UsageStateStore.LoadAsync(cancellationToken);
+        if (savedState is null)
+        {
+            adapters.Widget.ShowChecking();
+        }
+        else
+        {
+            adapters.Widget.ShowUsage(savedState);
+        }
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)

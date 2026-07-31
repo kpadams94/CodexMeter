@@ -7,6 +7,9 @@ public sealed class SystemClock : IClock
 
 public sealed class NoOpUsageStateStore : IUsageStateStore
 {
+    public Task<UsageState?> LoadAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<UsageState?>(null);
+
     public Task SaveAsync(UsageState state, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
