@@ -47,6 +47,68 @@ public sealed partial class ApplicationSessionAcceptanceTests
         });
     }
 
+    [Fact]
+    public void Saved_usage_is_shown_on_restart_when_startup_reconciliation_fails()
+    {
+        var savedState = new UsageState(
+            RemainingPercentage.From(47),
+            new DateTimeOffset(2026, 7, 31, 17, 30, 0, TimeSpan.Zero));
+        RunWindowSession(new FailingUsageSource(), (window, session, stateStore) =>
+        {
+            stateStore.InitialState = savedState;
+
+            session.StartAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
+
+            Assert.Equal("47 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+            Assert.Equal(savedState.CheckedAt.ToLocalTime().ToString("g"), card.ToolTip);
+            Assert.Empty(stateStore.SavedStates);
+        });
+    }
+
+    [Fact]
+    public void Successful_startup_reconciliation_replaces_the_saved_usage_and_check_time()
+    {
+        var savedState = new UsageState(
+            RemainingPercentage.From(47),
+            new DateTimeOffset(2026, 7, 31, 17, 30, 0, TimeSpan.Zero));
+        RunWindowSession(new ControlledUsageSource(28), (window, session, stateStore) =>
+        {
+            stateStore.InitialState = savedState;
+
+            session.StartAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
+            var reconciledState = Assert.Single(stateStore.SavedStates);
+
+            Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+            Assert.Equal(new ControlledClock().UtcNow, reconciledState.CheckedAt);
+            Assert.Equal(reconciledState.CheckedAt.ToLocalTime().ToString("g"), card.ToolTip);
+        });
+    }
+
+    [Fact]
+    public void Saved_usage_remains_visible_while_startup_reconciliation_is_pending()
+    {
+        var savedState = new UsageState(
+            RemainingPercentage.From(47),
+            new DateTimeOffset(2026, 7, 31, 17, 30, 0, TimeSpan.Zero));
+        var usageSource = new DeferredUsageSource();
+        RunWindowSession(usageSource, (window, session, stateStore) =>
+        {
+            stateStore.InitialState = savedState;
+
+            var start = session.StartAsync();
+            usageSource.WaitForRead();
+            var card = Assert.IsType<QuietCard>(window.Content);
+
+            Assert.Equal("47 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+            Assert.Equal(savedState.CheckedAt.ToLocalTime().ToString("g"), card.ToolTip);
+
+            usageSource.Complete(28);
+            start.GetAwaiter().GetResult();
+        });
+    }
+
     [Theory]
     [InlineData(-25, 100)]
     [InlineData(150, 0)]
@@ -79,6 +141,7 @@ public sealed partial class ApplicationSessionAcceptanceTests
             Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
             Assert.Equal(2, stateStore.SavedStates.Count);
             Assert.Equal(3, usageSource.ReadCount);
+            Assert.Equal(new ControlledClock().UtcNow.ToLocalTime().ToString("g"), card.ToolTip);
         });
     }
 
@@ -143,6 +206,26 @@ public sealed partial class ApplicationSessionAcceptanceTests
         }
     }
 
+    private sealed class DeferredUsageSource : IUsageSource
+    {
+        private readonly ManualResetEventSlim readStarted = new();
+        private readonly TaskCompletionSource<double?> result = new();
+
+        public async Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(
+            CancellationToken cancellationToken)
+        {
+            readStarted.Set();
+            var usedPercentage = await result.Task.WaitAsync(cancellationToken);
+            return usedPercentage is null
+                ? null
+                : WeeklyUsedPercentage.From(usedPercentage.Value);
+        }
+
+        public void WaitForRead() => readStarted.Wait(TimeSpan.FromSeconds(2));
+
+        public void Complete(double? usedPercentage) => result.SetResult(usedPercentage);
+    }
+
     private sealed class ControlledClock : IClock
     {
         public DateTimeOffset UtcNow => new(2026, 7, 31, 18, 0, 0, TimeSpan.Zero);
@@ -150,7 +233,12 @@ public sealed partial class ApplicationSessionAcceptanceTests
 
     private sealed class InMemoryUsageStateStore : IUsageStateStore
     {
+        public UsageState? InitialState { get; set; }
+
         public List<UsageState> SavedStates { get; } = [];
+
+        public Task<UsageState?> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(InitialState);
 
         public Task SaveAsync(UsageState state, CancellationToken cancellationToken)
         {
