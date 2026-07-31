@@ -18,7 +18,7 @@ public partial class App : Application
             new SystemClock(),
             new LocalUsageStateStore(),
             new CurrentDesktopState(),
-            new NoOpNotificationSink(),
+            new WindowsNotificationSink(),
             window,
             new WindowsAutomaticRefreshSchedule(),
             new WpfUiDispatcher());

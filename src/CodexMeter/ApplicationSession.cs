@@ -94,9 +94,12 @@ public sealed record ApplicationSessionAdapters(
 
 public sealed class ApplicationSession : IDisposable
 {
+    private const double ResetNotificationThreshold = 10;
     private readonly ApplicationSessionAdapters adapters;
+    private readonly SemaphoreSlim refreshLock = new(1, 1);
     private readonly IUsageUpdateSource? usageUpdates;
     private readonly IUiDispatcher uiDispatcher;
+    private UsageState? previousState;
 
     public ApplicationSession(ApplicationSessionAdapters adapters)
     {
@@ -132,32 +135,48 @@ public sealed class ApplicationSession : IDisposable
         }
         else
         {
+            previousState = savedState;
             await uiDispatcher.InvokeAsync(() => adapters.Widget.ShowUsage(savedState));
         }
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        WeeklyUsedPercentage? usedPercentage;
+        await refreshLock.WaitAsync(cancellationToken);
         try
         {
-            usedPercentage = await adapters.UsageSource
-                .ReadWeeklyUsedPercentageAsync(cancellationToken);
-        }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
-        if (usedPercentage is null)
-        {
-            return;
-        }
+            WeeklyUsedPercentage? usedPercentage;
+            try
+            {
+                usedPercentage = await adapters.UsageSource
+                    .ReadWeeklyUsedPercentageAsync(cancellationToken);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            if (usedPercentage is null)
+            {
+                return;
+            }
 
-        var remainingPercentage = RemainingPercentage.FromUsed(usedPercentage.Value);
-        var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
+            var remainingPercentage = RemainingPercentage.FromUsed(usedPercentage.Value);
+            var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
+            var shouldNotify = ShouldNotifyReset(previousState, state);
 
-        await adapters.UsageStateStore.SaveAsync(state, cancellationToken);
-        await uiDispatcher.InvokeAsync(() => adapters.Widget.ShowUsage(state));
+            await adapters.UsageStateStore.SaveAsync(state, cancellationToken);
+            await uiDispatcher.InvokeAsync(() => adapters.Widget.ShowUsage(state));
+            previousState = state;
+
+            if (shouldNotify)
+            {
+                adapters.Notifications.ShowReset(state);
+            }
+        }
+        finally
+        {
+            refreshLock.Release();
+        }
     }
 
     public void Dispose()
@@ -174,6 +193,7 @@ public sealed class ApplicationSession : IDisposable
         }
 
         (adapters.UsageSource as IDisposable)?.Dispose();
+        (adapters.Notifications as IDisposable)?.Dispose();
     }
 
     private async Task RefreshAutomaticallyAsync()
@@ -189,6 +209,12 @@ public sealed class ApplicationSession : IDisposable
     }
 
     private Task RefreshFromPassiveUpdateAsync() => RefreshAsync();
+
+    private static bool ShouldNotifyReset(UsageState? previousState, UsageState currentState) =>
+        previousState is { } previous
+        && ((currentState.Remaining.Value >= 100
+                && currentState.Remaining.Value > previous.Remaining.Value)
+            || currentState.Remaining.Value - previous.Remaining.Value >= ResetNotificationThreshold);
 
     private sealed class ImmediateUiDispatcher : IUiDispatcher
     {
