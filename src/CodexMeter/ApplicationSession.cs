@@ -34,6 +34,25 @@ public interface IUsageSource
     Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken);
 }
 
+public interface IUsageUpdateSource
+{
+    event Func<Task>? UsageUpdated;
+}
+
+public interface IAutomaticRefreshSchedule
+{
+    event Func<Task>? RefreshRequested;
+
+    void Start();
+
+    void Reset();
+}
+
+public interface IUiDispatcher
+{
+    Task InvokeAsync(Action action);
+}
+
 public interface IClock
 {
     DateTimeOffset UtcNow { get; }
@@ -69,26 +88,51 @@ public sealed record ApplicationSessionAdapters(
     IUsageStateStore UsageStateStore,
     IDesktopState DesktopState,
     INotificationSink Notifications,
-    IWidgetShell Widget);
+    IWidgetShell Widget,
+    IAutomaticRefreshSchedule? AutomaticRefreshSchedule = null,
+    IUiDispatcher? UiDispatcher = null);
 
-public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
+public sealed class ApplicationSession : IDisposable
 {
+    private readonly ApplicationSessionAdapters adapters;
+    private readonly IUsageUpdateSource? usageUpdates;
+    private readonly IUiDispatcher uiDispatcher;
+
+    public ApplicationSession(ApplicationSessionAdapters adapters)
+    {
+        this.adapters = adapters;
+        uiDispatcher = adapters.UiDispatcher ?? new ImmediateUiDispatcher();
+        usageUpdates = adapters.UsageSource as IUsageUpdateSource;
+        if (usageUpdates is not null)
+        {
+            usageUpdates.UsageUpdated += RefreshFromPassiveUpdateAsync;
+        }
+
+        if (adapters.AutomaticRefreshSchedule is not null)
+        {
+            adapters.AutomaticRefreshSchedule.RefreshRequested += RefreshAutomaticallyAsync;
+        }
+    }
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         await RestoreAsync(cancellationToken);
         await RefreshAsync(cancellationToken);
+        StartAutomaticRefreshes();
     }
+
+    public void StartAutomaticRefreshes() => adapters.AutomaticRefreshSchedule?.Start();
 
     public async Task RestoreAsync(CancellationToken cancellationToken = default)
     {
         var savedState = await adapters.UsageStateStore.LoadAsync(cancellationToken);
         if (savedState is null)
         {
-            adapters.Widget.ShowChecking();
+            await uiDispatcher.InvokeAsync(adapters.Widget.ShowChecking);
         }
         else
         {
-            adapters.Widget.ShowUsage(savedState);
+            await uiDispatcher.InvokeAsync(() => adapters.Widget.ShowUsage(savedState));
         }
     }
 
@@ -113,6 +157,45 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
         var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
 
         await adapters.UsageStateStore.SaveAsync(state, cancellationToken);
-        adapters.Widget.ShowUsage(state);
+        await uiDispatcher.InvokeAsync(() => adapters.Widget.ShowUsage(state));
+    }
+
+    public void Dispose()
+    {
+        if (usageUpdates is not null)
+        {
+            usageUpdates.UsageUpdated -= RefreshFromPassiveUpdateAsync;
+        }
+
+        if (adapters.AutomaticRefreshSchedule is not null)
+        {
+            adapters.AutomaticRefreshSchedule.RefreshRequested -= RefreshAutomaticallyAsync;
+            (adapters.AutomaticRefreshSchedule as IDisposable)?.Dispose();
+        }
+
+        (adapters.UsageSource as IDisposable)?.Dispose();
+    }
+
+    private async Task RefreshAutomaticallyAsync()
+    {
+        try
+        {
+            await RefreshAsync();
+        }
+        finally
+        {
+            adapters.AutomaticRefreshSchedule?.Reset();
+        }
+    }
+
+    private Task RefreshFromPassiveUpdateAsync() => RefreshAsync();
+
+    private sealed class ImmediateUiDispatcher : IUiDispatcher
+    {
+        public Task InvokeAsync(Action action)
+        {
+            action();
+            return Task.CompletedTask;
+        }
     }
 }
