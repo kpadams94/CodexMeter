@@ -12,7 +12,7 @@ public sealed class CodexAppServerUsageSource : IUsageSource
     private readonly IReadOnlyList<string> arguments;
 
     public CodexAppServerUsageSource()
-        : this("codex", "app-server", "--listen", "stdio://")
+        : this(CodexExecutableLocator.Resolve(), "app-server", "--listen", "stdio://")
     {
     }
 
