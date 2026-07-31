@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 
 namespace CodexMeter;
@@ -21,7 +22,8 @@ public sealed class CodexAppServerUsageSource : IUsageSource
         this.arguments = arguments;
     }
 
-    public async Task<double?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken)
+    public async Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(
+        CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(ReadTimeout);
@@ -62,15 +64,15 @@ public sealed class CodexAppServerUsageSource : IUsageSource
                 timeout.Token);
 
             using var response = await ReadResponseAsync(process, 2, timeout.Token);
-            return ReadWeeklyUsedPercentage(response.RootElement.GetProperty("result"));
+            var usedPercentage = ReadWeeklyUsedPercentage(
+                response.RootElement.GetProperty("result"));
+            return usedPercentage is null
+                ? null
+                : WeeklyUsedPercentage.From(usedPercentage.Value);
         }
         finally
         {
-            process.StandardInput.Close();
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            StopAppServer(process);
         }
     }
 
@@ -140,6 +142,7 @@ public sealed class CodexAppServerUsageSource : IUsageSource
     private static double? ReadWeeklyUsedPercentage(JsonElement result)
     {
         if (result.TryGetProperty("rateLimitsByLimitId", out var limitsById)
+            && limitsById.ValueKind == JsonValueKind.Object
             && limitsById.TryGetProperty("codex", out var codexLimits))
         {
             var usedPercentage = ReadWeeklyWindow(codexLimits);
@@ -150,8 +153,8 @@ public sealed class CodexAppServerUsageSource : IUsageSource
         }
 
         if (result.TryGetProperty("rateLimits", out var rateLimits)
-            && (!rateLimits.TryGetProperty("limitId", out var limitId)
-                || limitId.GetString() == "codex"))
+            && rateLimits.ValueKind == JsonValueKind.Object
+            && IsLegacyCodexBucket(rateLimits))
         {
             return ReadWeeklyWindow(rateLimits);
         }
@@ -178,5 +181,35 @@ public sealed class CodexAppServerUsageSource : IUsageSource
         }
 
         return null;
+    }
+
+    private static bool IsLegacyCodexBucket(JsonElement rateLimits)
+    {
+        if (!rateLimits.TryGetProperty("limitId", out var limitId)
+            || limitId.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        return limitId.ValueKind == JsonValueKind.String
+            && limitId.GetString() == "codex";
+    }
+
+    private static void StopAppServer(Process process)
+    {
+        try
+        {
+            process.StandardInput.Close();
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (IOException)
+        {
+        }
     }
 }

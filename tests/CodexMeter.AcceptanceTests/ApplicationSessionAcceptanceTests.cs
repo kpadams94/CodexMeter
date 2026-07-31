@@ -1,14 +1,9 @@
 using CodexMeter;
-using System.Windows;
 using System.Windows.Automation;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Text.Json;
-using System.IO;
 
 namespace CodexMeter.AcceptanceTests;
 
-public sealed class ApplicationSessionAcceptanceTests
+public sealed partial class ApplicationSessionAcceptanceTests
 {
     [Fact]
     public void Launch_displays_usage_from_the_controlled_source_in_the_production_window()
@@ -176,112 +171,19 @@ public sealed class ApplicationSessionAcceptanceTests
         });
     }
 
-    [Fact]
-    public void Left_click_and_refresh_now_each_read_the_account_again()
-    {
-        StaThread.Run(() =>
-        {
-            var window = new MainWindow();
-            var usageSource = new SequencedUsageSource(
-                () => Task.FromResult<double?>(53),
-                () => Task.FromResult<double?>(40),
-                () => Task.FromResult<double?>(25));
-            var adapters = new ApplicationSessionAdapters(
-                usageSource,
-                new ControlledClock(),
-                new InMemoryUsageStateStore(),
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                window);
-            var session = new ApplicationSession(adapters);
-            window.RefreshRequested += () => session.RefreshAsync();
-
-            window.Show();
-            try
-            {
-                session.StartAsync().GetAwaiter().GetResult();
-                window.RaiseEvent(new MouseButtonEventArgs(
-                    Mouse.PrimaryDevice,
-                    Environment.TickCount,
-                    MouseButton.Left)
-                {
-                    RoutedEvent = Mouse.MouseUpEvent,
-                });
-
-                var menu = Assert.IsType<ContextMenu>(window.ContextMenu);
-                var refreshNow = Assert.IsType<MenuItem>(Assert.Single(menu.Items));
-                refreshNow.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-
-                var card = Assert.IsType<QuietCard>(window.Content);
-                Assert.Equal(3, usageSource.ReadCount);
-                Assert.Equal("75 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
-            }
-            finally
-            {
-                window.Close();
-            }
-        });
-    }
-
-    [Fact]
-    public void Production_session_reads_the_weekly_window_through_codex_app_server()
-    {
-        StaThread.Run(() =>
-        {
-            var transcriptPath = Path.Combine(Path.GetTempPath(), $"codex-meter-{Guid.NewGuid():N}.jsonl");
-            var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "FakeCodexAppServer.ps1");
-            var widget = new RecordingWidgetShell();
-            var usageSource = new CodexAppServerUsageSource(
-                "powershell.exe",
-                "-NoProfile",
-                "-NonInteractive",
-                "-File",
-                fixturePath,
-                "-TranscriptPath",
-                transcriptPath);
-            var adapters = new ApplicationSessionAdapters(
-                usageSource,
-                new ControlledClock(),
-                new InMemoryUsageStateStore(),
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                widget);
-
-            try
-            {
-                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
-                var requests = File.ReadAllLines(transcriptPath)
-                    .Select(line => JsonDocument.Parse(line))
-                    .ToArray();
-
-                Assert.Equal(37, Assert.IsType<UsageState>(widget.LastState).Remaining.Value);
-                Assert.Equal("initialize", requests[0].RootElement.GetProperty("method").GetString());
-                Assert.Equal("initialized", requests[1].RootElement.GetProperty("method").GetString());
-                Assert.Equal("account/rateLimits/read", requests[2].RootElement.GetProperty("method").GetString());
-                Assert.DoesNotContain(requests, request =>
-                    request.RootElement.GetProperty("method").GetString()!.Contains("login", StringComparison.Ordinal));
-
-                foreach (var request in requests)
-                {
-                    request.Dispose();
-                }
-            }
-            finally
-            {
-                File.Delete(transcriptPath);
-            }
-        });
-    }
-
     private sealed class ControlledUsageSource(double? usedPercentage) : IUsageSource
     {
-        public Task<double?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(usedPercentage);
+        public Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(
+            CancellationToken cancellationToken) =>
+            Task.FromResult(usedPercentage is null
+                ? (WeeklyUsedPercentage?)null
+                : WeeklyUsedPercentage.From(usedPercentage.Value));
     }
 
     private sealed class FailingUsageSource : IUsageSource
     {
-        public Task<double?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken) =>
+        public Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(
+            CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Controlled account read failure.");
     }
 
@@ -291,10 +193,14 @@ public sealed class ApplicationSessionAcceptanceTests
 
         public int ReadCount { get; private set; }
 
-        public Task<double?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken)
+        public async Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(
+            CancellationToken cancellationToken)
         {
             ReadCount++;
-            return remainingReads.Dequeue()();
+            var usedPercentage = await remainingReads.Dequeue()();
+            return usedPercentage is null
+                ? null
+                : WeeklyUsedPercentage.From(usedPercentage.Value);
         }
     }
 

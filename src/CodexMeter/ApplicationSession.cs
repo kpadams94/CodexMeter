@@ -10,13 +10,28 @@ public readonly record struct RemainingPercentage
     public double Value { get; }
 
     public static RemainingPercentage From(double value) => new(Math.Clamp(value, 0, 100));
+
+    public static RemainingPercentage FromUsed(WeeklyUsedPercentage usedPercentage) =>
+        From(100 - usedPercentage.Value);
+}
+
+public readonly record struct WeeklyUsedPercentage
+{
+    private WeeklyUsedPercentage(double value)
+    {
+        Value = value;
+    }
+
+    public double Value { get; }
+
+    public static WeeklyUsedPercentage From(double value) => new(value);
 }
 
 public sealed record UsageState(RemainingPercentage Remaining, DateTimeOffset CheckedAt);
 
 public interface IUsageSource
 {
-    Task<double?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken);
+    Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken);
 }
 
 public interface IClock
@@ -64,7 +79,7 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        double? usedPercentage;
+        WeeklyUsedPercentage? usedPercentage;
         try
         {
             usedPercentage = await adapters.UsageSource
@@ -79,7 +94,7 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
             return;
         }
 
-        var remainingPercentage = RemainingPercentage.From(100 - usedPercentage.Value);
+        var remainingPercentage = RemainingPercentage.FromUsed(usedPercentage.Value);
         var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
 
         await adapters.UsageStateStore.SaveAsync(state, cancellationToken);
