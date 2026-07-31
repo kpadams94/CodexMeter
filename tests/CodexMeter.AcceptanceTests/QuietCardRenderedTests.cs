@@ -39,7 +39,7 @@ public sealed class QuietCardRenderedTests
     {
         StaThread.Run(() =>
         {
-            var card = new QuietCard { Usage = RemainingPercentage.From(percentage) };
+            var card = new QuietCard { RemainingUsage = RemainingPercentage.From(percentage) };
             card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             card.Arrange(new Rect(card.DesiredSize));
             card.UpdateLayout();

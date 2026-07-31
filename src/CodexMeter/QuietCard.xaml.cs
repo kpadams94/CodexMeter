@@ -6,8 +6,8 @@ namespace CodexMeter;
 
 public partial class QuietCard : UserControl
 {
-    public static readonly DependencyProperty UsageProperty = DependencyProperty.Register(
-        nameof(Usage),
+    public static readonly DependencyProperty RemainingUsageProperty = DependencyProperty.Register(
+        nameof(RemainingUsage),
         typeof(RemainingPercentage),
         typeof(QuietCard),
         new FrameworkPropertyMetadata(RemainingPercentage.From(47), OnUsageChanged));
@@ -15,13 +15,13 @@ public partial class QuietCard : UserControl
     public QuietCard()
     {
         InitializeComponent();
-        UpdatePresentation(Usage);
+        UpdatePresentation(RemainingUsage);
     }
 
-    public RemainingPercentage Usage
+    public RemainingPercentage RemainingUsage
     {
-        get => (RemainingPercentage)GetValue(UsageProperty);
-        set => SetValue(UsageProperty, value);
+        get => (RemainingPercentage)GetValue(RemainingUsageProperty);
+        set => SetValue(RemainingUsageProperty, value);
     }
 
     public void ShowChecking()
@@ -33,7 +33,7 @@ public partial class QuietCard : UserControl
 
     public void ShowUsage(RemainingPercentage remainingPercentage)
     {
-        SetCurrentValue(UsageProperty, remainingPercentage);
+        SetCurrentValue(RemainingUsageProperty, remainingPercentage);
         UpdatePresentation(remainingPercentage);
     }
 
