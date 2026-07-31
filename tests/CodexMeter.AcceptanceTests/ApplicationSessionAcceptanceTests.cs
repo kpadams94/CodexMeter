@@ -145,9 +145,51 @@ public sealed partial class ApplicationSessionAcceptanceTests
         });
     }
 
+    [Fact]
+    public void Automatic_checks_refresh_hourly_and_restart_the_schedule_after_wake_even_when_the_read_fails()
+    {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(53),
+            () => Task.FromResult<double?>(28),
+            () => throw new InvalidOperationException("Controlled wake read failure."));
+        var schedule = new ControlledAutomaticRefreshSchedule();
+
+        RunWindowSession(usageSource, (window, session, stateStore) =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+
+            schedule.AdvanceOneHourAsync().GetAwaiter().GetResult();
+            schedule.WakeAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
+
+            Assert.Equal(3, usageSource.ReadCount);
+            Assert.Equal(3, schedule.ResetCount);
+            Assert.Equal(2, stateStore.SavedStates.Count);
+            Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+        }, schedule);
+    }
+
+    [Fact]
+    public void Passive_rate_limit_updates_refresh_through_the_manual_persistence_and_display_path()
+    {
+        var usageSource = new NotifyingUsageSource(53, 28);
+
+        RunWindowSession(usageSource, (window, session, stateStore) =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            usageSource.NotifyAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
+
+            Assert.Equal(2, usageSource.ReadCount);
+            Assert.Equal(2, stateStore.SavedStates.Count);
+            Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+        });
+    }
+
     private static void RunWindowSession(
         IUsageSource usageSource,
-        Action<MainWindow, ApplicationSession, InMemoryUsageStateStore> assertion)
+        Action<MainWindow, ApplicationSession, InMemoryUsageStateStore> assertion,
+        IAutomaticRefreshSchedule? automaticRefreshSchedule = null)
     {
         StaThread.Run(() =>
         {
@@ -159,7 +201,8 @@ public sealed partial class ApplicationSessionAcceptanceTests
                 stateStore,
                 new ControlledDesktopState(),
                 new RecordingNotificationSink(),
-                window);
+                window,
+                automaticRefreshSchedule);
 
             window.Show();
             try
@@ -224,6 +267,53 @@ public sealed partial class ApplicationSessionAcceptanceTests
         public void WaitForRead() => readStarted.Wait(TimeSpan.FromSeconds(2));
 
         public void Complete(double? usedPercentage) => result.SetResult(usedPercentage);
+    }
+
+    private sealed class NotifyingUsageSource(params double?[] usedPercentages) : IUsageSource, IUsageUpdateSource
+    {
+        private readonly Queue<double?> values = new(usedPercentages);
+
+        public event Func<Task>? UsageUpdated;
+
+        public int ReadCount { get; private set; }
+
+        public Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken)
+        {
+            ReadCount++;
+            var value = values.Dequeue();
+            return Task.FromResult(value is null
+                ? (WeeklyUsedPercentage?)null
+                : WeeklyUsedPercentage.From(value.Value));
+        }
+
+        public async Task NotifyAsync()
+        {
+            if (UsageUpdated is not null)
+            {
+                await UsageUpdated();
+            }
+        }
+    }
+
+    private sealed class ControlledAutomaticRefreshSchedule : IAutomaticRefreshSchedule
+    {
+        public event Func<Task>? RefreshRequested;
+
+        public int ResetCount { get; private set; }
+
+        public void Start() => Reset();
+
+        public void Reset() => ResetCount++;
+
+        public async Task AdvanceOneHourAsync()
+        {
+            if (RefreshRequested is not null)
+            {
+                await RefreshRequested();
+            }
+        }
+
+        public Task WakeAsync() => AdvanceOneHourAsync();
     }
 
     private sealed class ControlledClock : IClock

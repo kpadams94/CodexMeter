@@ -59,4 +59,44 @@ public sealed partial class ApplicationSessionAcceptanceTests
             }
         });
     }
+
+    [Fact]
+    public async Task Production_usage_source_raises_an_event_when_the_app_server_announces_a_rate_limit_update()
+    {
+        var transcriptPath = Path.Combine(Path.GetTempPath(), $"codex-meter-{Guid.NewGuid():N}.jsonl");
+        var notificationPath = Path.Combine(Path.GetTempPath(), $"codex-meter-{Guid.NewGuid():N}.notify");
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "FakeCodexAppServer.ps1");
+        var usageSource = new CodexAppServerUsageSource(
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            fixturePath,
+            "-TranscriptPath",
+            transcriptPath,
+            "-ResponseShape",
+            "multiBucket",
+            "-PassiveNotificationPath",
+            notificationPath);
+        var updateReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var updates = Assert.IsAssignableFrom<IUsageUpdateSource>(usageSource);
+        updates.UsageUpdated += () =>
+        {
+            updateReceived.SetResult(true);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            await usageSource.ReadWeeklyUsedPercentageAsync(CancellationToken.None);
+            await File.WriteAllTextAsync(notificationPath, "notify", CancellationToken.None);
+            await updateReceived.Task.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+        }
+        finally
+        {
+            usageSource.Dispose();
+            File.Delete(transcriptPath);
+            File.Delete(notificationPath);
+        }
+    }
 }

@@ -4,7 +4,9 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateSet('multiBucket', 'legacyNullMetadata')]
-    [string]$ResponseShape
+    [string]$ResponseShape,
+
+    [string]$PassiveNotificationPath
 )
 
 $initialize = [Console]::In.ReadLine()
@@ -22,4 +24,12 @@ if ($ResponseShape -eq 'legacyNullMetadata') {
 }
 else {
     [Console]::Out.WriteLine('{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":11,"windowDurationMins":300,"resetsAt":1},"secondary":{"usedPercent":9,"windowDurationMins":10080,"resetsAt":2}},"rateLimitsByLimitId":{"codex":{"limitId":"codex","primary":{"usedPercent":11,"windowDurationMins":300,"resetsAt":1},"secondary":{"usedPercent":63,"windowDurationMins":10080,"resetsAt":2}},"codex_other":{"limitId":"codex_other","primary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":3},"secondary":null}}}}')
+}
+
+if ($PassiveNotificationPath) {
+    while (-not (Test-Path -LiteralPath $PassiveNotificationPath)) {
+        Start-Sleep -Milliseconds 25
+    }
+
+    [Console]::Out.WriteLine('{"method":"account/rateLimits/updated","params":{"rateLimits":{"secondary":{"usedPercent":72,"windowDurationMins":10080,"resetsAt":2}}}}')
 }
