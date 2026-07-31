@@ -11,6 +11,12 @@
         Background="Transparent"
         ShowInTaskbar="False"
         Topmost="True"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        MouseLeftButtonUp="OnMouseLeftButtonUp">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="Refresh Now" Click="OnRefreshNowClick" />
+        </ContextMenu>
+    </Window.ContextMenu>
     <local:QuietCard x:Name="Card" />
 </Window>

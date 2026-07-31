@@ -2,10 +2,11 @@
 
 A tiny Windows widget for monitoring remaining weekly Codex usage.
 
-The current application is a .NET 8 WPF Quiet Card that launches with a controlled
-47% sample. The application-session boundary accepts controlled usage, time,
-persistence, desktop-state, notification, and widget adapters so subsequent work
-can exercise complete sessions without account access or Windows side effects.
+The current application is a .NET 8 WPF Quiet Card that reads the signed-in
+Codex account's weekly rate-limit window through `codex app-server`. It displays
+the remaining percentage at startup and refreshes on left-click or through the
+right-click **Refresh Now** command. Failed reads remain silent and preserve the
+last successful value.
 
 ## Requirements
 
