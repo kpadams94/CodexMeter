@@ -8,96 +8,42 @@ public sealed partial class ApplicationSessionAcceptanceTests
     [Fact]
     public void Launch_displays_usage_from_the_controlled_source_in_the_production_window()
     {
-        StaThread.Run(() =>
+        RunWindowSession(new ControlledUsageSource(53), (window, session, stateStore) =>
         {
-            var window = new MainWindow();
-            var stateStore = new InMemoryUsageStateStore();
-            var adapters = new ApplicationSessionAdapters(
-                new ControlledUsageSource(53),
-                new ControlledClock(),
-                stateStore,
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                window);
+            session.StartAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
 
-            window.Show();
-            try
-            {
-                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
-                var card = Assert.IsType<QuietCard>(window.Content);
-
-                Assert.True(window.IsVisible);
-                Assert.Equal(
-                    "47 percent of weekly Codex usage remaining",
-                    AutomationProperties.GetName(card));
-                Assert.Equal(47, Assert.Single(stateStore.SavedStates).Remaining.Value);
-            }
-            finally
-            {
-                window.Close();
-            }
+            Assert.True(window.IsVisible);
+            Assert.Equal(
+                "47 percent of weekly Codex usage remaining",
+                AutomationProperties.GetName(card));
+            Assert.Equal(47, Assert.Single(stateStore.SavedStates).Remaining.Value);
         });
     }
 
     [Fact]
     public void Failed_startup_read_stays_silently_in_the_checking_state()
     {
-        StaThread.Run(() =>
+        RunWindowSession(new FailingUsageSource(), (window, session, stateStore) =>
         {
-            var window = new MainWindow();
-            var stateStore = new InMemoryUsageStateStore();
-            var adapters = new ApplicationSessionAdapters(
-                new FailingUsageSource(),
-                new ControlledClock(),
-                stateStore,
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                window);
+            session.StartAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
 
-            window.Show();
-            try
-            {
-                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
-                var card = Assert.IsType<QuietCard>(window.Content);
-
-                Assert.Equal("Checking weekly Codex usage", AutomationProperties.GetName(card));
-                Assert.Empty(stateStore.SavedStates);
-            }
-            finally
-            {
-                window.Close();
-            }
+            Assert.Equal("Checking weekly Codex usage", AutomationProperties.GetName(card));
+            Assert.Empty(stateStore.SavedStates);
         });
     }
 
     [Fact]
     public void Missing_weekly_window_stays_in_the_checking_state()
     {
-        StaThread.Run(() =>
+        RunWindowSession(new ControlledUsageSource(null), (window, session, stateStore) =>
         {
-            var window = new MainWindow();
-            var stateStore = new InMemoryUsageStateStore();
-            var adapters = new ApplicationSessionAdapters(
-                new ControlledUsageSource(null),
-                new ControlledClock(),
-                stateStore,
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                window);
+            session.StartAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
 
-            window.Show();
-            try
-            {
-                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
-                var card = Assert.IsType<QuietCard>(window.Content);
-
-                Assert.Equal("Checking weekly Codex usage", AutomationProperties.GetName(card));
-                Assert.Empty(stateStore.SavedStates);
-            }
-            finally
-            {
-                window.Close();
-            }
+            Assert.Equal("Checking weekly Codex usage", AutomationProperties.GetName(card));
+            Assert.Empty(stateStore.SavedStates);
         });
     }
 
@@ -106,43 +52,44 @@ public sealed partial class ApplicationSessionAcceptanceTests
     [InlineData(150, 0)]
     public void Out_of_range_usage_is_clamped_when_displayed(double usedPercentage, double expectedRemaining)
     {
-        StaThread.Run(() =>
+        RunWindowSession(
+            new ControlledUsageSource(usedPercentage),
+            (_, session, stateStore) =>
         {
-            var window = new MainWindow();
-            var stateStore = new InMemoryUsageStateStore();
-            var adapters = new ApplicationSessionAdapters(
-                new ControlledUsageSource(usedPercentage),
-                new ControlledClock(),
-                stateStore,
-                new ControlledDesktopState(),
-                new RecordingNotificationSink(),
-                window);
+            session.StartAsync().GetAwaiter().GetResult();
 
-            window.Show();
-            try
-            {
-                new ApplicationSession(adapters).StartAsync().GetAwaiter().GetResult();
-
-                Assert.Equal(expectedRemaining, Assert.Single(stateStore.SavedStates).Remaining.Value);
-            }
-            finally
-            {
-                window.Close();
-            }
+            Assert.Equal(expectedRemaining, Assert.Single(stateStore.SavedStates).Remaining.Value);
         });
     }
 
     [Fact]
     public void Refresh_updates_after_success_and_preserves_the_display_after_failure()
     {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(53),
+            () => Task.FromResult<double?>(28),
+            () => throw new InvalidOperationException("Controlled account read failure."));
+        RunWindowSession(usageSource, (window, session, stateStore) =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+            var card = Assert.IsType<QuietCard>(window.Content);
+
+            Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
+            Assert.Equal(2, stateStore.SavedStates.Count);
+            Assert.Equal(3, usageSource.ReadCount);
+        });
+    }
+
+    private static void RunWindowSession(
+        IUsageSource usageSource,
+        Action<MainWindow, ApplicationSession, InMemoryUsageStateStore> assertion)
+    {
         StaThread.Run(() =>
         {
             var window = new MainWindow();
             var stateStore = new InMemoryUsageStateStore();
-            var usageSource = new SequencedUsageSource(
-                () => Task.FromResult<double?>(53),
-                () => Task.FromResult<double?>(28),
-                () => throw new InvalidOperationException("Controlled account read failure."));
             var adapters = new ApplicationSessionAdapters(
                 usageSource,
                 new ControlledClock(),
@@ -150,19 +97,11 @@ public sealed partial class ApplicationSessionAcceptanceTests
                 new ControlledDesktopState(),
                 new RecordingNotificationSink(),
                 window);
-            var session = new ApplicationSession(adapters);
 
             window.Show();
             try
             {
-                session.StartAsync().GetAwaiter().GetResult();
-                session.RefreshAsync().GetAwaiter().GetResult();
-                session.RefreshAsync().GetAwaiter().GetResult();
-                var card = Assert.IsType<QuietCard>(window.Content);
-
-                Assert.Equal("72 percent of weekly Codex usage remaining", AutomationProperties.GetName(card));
-                Assert.Equal(2, stateStore.SavedStates.Count);
-                Assert.Equal(3, usageSource.ReadCount);
+                assertion(window, new ApplicationSession(adapters), stateStore);
             }
             finally
             {
