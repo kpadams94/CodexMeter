@@ -12,9 +12,30 @@ public partial class MainWindow : Window, IWidgetShell
         PlaceAboveTaskbar();
     }
 
+    public event Func<Task>? RefreshRequested;
+
     public void ShowChecking() => Card.ShowChecking();
 
     public void ShowUsage(UsageState state) => Card.ShowUsage(state.Remaining);
+
+    private async void OnMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
+        await RaiseRefreshRequestedAsync();
+
+    private async void OnRefreshNowClick(object sender, RoutedEventArgs e) =>
+        await RaiseRefreshRequestedAsync();
+
+    private async Task RaiseRefreshRequestedAsync()
+    {
+        if (RefreshRequested is null)
+        {
+            return;
+        }
+
+        foreach (Func<Task> handler in RefreshRequested.GetInvocationList())
+        {
+            await handler();
+        }
+    }
 
     private void PlaceAboveTaskbar()
     {

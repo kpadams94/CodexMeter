@@ -2,21 +2,36 @@ namespace CodexMeter;
 
 public readonly record struct RemainingPercentage
 {
-    private RemainingPercentage(int value)
+    private RemainingPercentage(double value)
     {
         Value = value;
     }
 
-    public int Value { get; }
+    public double Value { get; }
 
-    public static RemainingPercentage From(int value) => new(Math.Clamp(value, 0, 100));
+    public static RemainingPercentage From(double value) => new(Math.Clamp(value, 0, 100));
+
+    public static RemainingPercentage FromUsed(WeeklyUsedPercentage usedPercentage) =>
+        From(100 - usedPercentage.Value);
+}
+
+public readonly record struct WeeklyUsedPercentage
+{
+    private WeeklyUsedPercentage(double value)
+    {
+        Value = value;
+    }
+
+    public double Value { get; }
+
+    public static WeeklyUsedPercentage From(double value) => new(value);
 }
 
 public sealed record UsageState(RemainingPercentage Remaining, DateTimeOffset CheckedAt);
 
 public interface IUsageSource
 {
-    Task<RemainingPercentage> ReadRemainingPercentageAsync(CancellationToken cancellationToken);
+    Task<WeeklyUsedPercentage?> ReadWeeklyUsedPercentageAsync(CancellationToken cancellationToken);
 }
 
 public interface IClock
@@ -59,9 +74,27 @@ public sealed class ApplicationSession(ApplicationSessionAdapters adapters)
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         adapters.Widget.ShowChecking();
+        await RefreshAsync(cancellationToken);
+    }
 
-        var remainingPercentage = await adapters.UsageSource
-            .ReadRemainingPercentageAsync(cancellationToken);
+    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        WeeklyUsedPercentage? usedPercentage;
+        try
+        {
+            usedPercentage = await adapters.UsageSource
+                .ReadWeeklyUsedPercentageAsync(cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        if (usedPercentage is null)
+        {
+            return;
+        }
+
+        var remainingPercentage = RemainingPercentage.FromUsed(usedPercentage.Value);
         var state = new UsageState(remainingPercentage, adapters.Clock.UtcNow);
 
         await adapters.UsageStateStore.SaveAsync(state, cancellationToken);

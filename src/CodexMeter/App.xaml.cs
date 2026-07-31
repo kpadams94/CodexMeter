@@ -13,13 +13,15 @@ public partial class App : Application
         window.Show();
 
         var adapters = new ApplicationSessionAdapters(
-            new SampleUsageSource(RemainingPercentage.From(47)),
+            new CodexAppServerUsageSource(),
             new SystemClock(),
             new NoOpUsageStateStore(),
             new CurrentDesktopState(),
             new NoOpNotificationSink(),
             window);
 
-        await new ApplicationSession(adapters).StartAsync();
+        var session = new ApplicationSession(adapters);
+        window.RefreshRequested += () => session.RefreshAsync();
+        await session.StartAsync();
     }
 }

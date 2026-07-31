@@ -1,11 +1,5 @@
 namespace CodexMeter;
 
-public sealed class SampleUsageSource(RemainingPercentage remainingPercentage) : IUsageSource
-{
-    public Task<RemainingPercentage> ReadRemainingPercentageAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(remainingPercentage);
-}
-
 public sealed class SystemClock : IClock
 {
     public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;

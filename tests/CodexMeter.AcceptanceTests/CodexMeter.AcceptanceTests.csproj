@@ -15,4 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CodexMeter\CodexMeter.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\FakeCodexAppServer.ps1" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
