@@ -14,6 +14,6 @@ public sealed class WindowsNotificationSink : INotificationSink
             {
                 Silent = true,
             })
-            .Show();
+            .Show(toast => toast.SuppressPopup = true);
     }
 }
