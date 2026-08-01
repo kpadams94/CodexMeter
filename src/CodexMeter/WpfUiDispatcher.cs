@@ -6,7 +6,7 @@ public sealed class WpfUiDispatcher : IUiDispatcher
 {
     public Task InvokeAsync(Action action)
     {
-        var dispatcher = Application.Current.Dispatcher;
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
         if (dispatcher.CheckAccess())
         {
             action();

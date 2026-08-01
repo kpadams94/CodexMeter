@@ -186,6 +186,109 @@ public sealed partial class ApplicationSessionAcceptanceTests
         });
     }
 
+    [Theory]
+    [InlineData(53, 44)]
+    [InlineData(53, 45)]
+    public void Increase_below_ten_percentage_points_does_not_notify(double initialUsed, double nextUsed)
+    {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(initialUsed),
+            () => Task.FromResult<double?>(nextUsed));
+        var notifications = new RecordingNotificationSink();
+
+        RunSession(usageSource, notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+
+            Assert.Empty(notifications.ResetStates);
+        });
+    }
+
+    [Theory]
+    [InlineData(43)]
+    [InlineData(42)]
+    public void Increase_of_at_least_ten_percentage_points_notifies(double nextUsed)
+    {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(53),
+            () => Task.FromResult<double?>(nextUsed));
+        var notifications = new RecordingNotificationSink();
+
+        RunSession(usageSource, notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+
+            Assert.Equal(100 - nextUsed, Assert.Single(notifications.ResetStates).Remaining.Value);
+        });
+    }
+
+    [Fact]
+    public void Reaching_one_hundred_percent_notifies_even_when_the_increase_is_below_ten_percentage_points()
+    {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(2),
+            () => Task.FromResult<double?>(0));
+        var notifications = new RecordingNotificationSink();
+
+        RunSession(usageSource, notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+
+            Assert.Equal(100, Assert.Single(notifications.ResetStates).Remaining.Value);
+        });
+    }
+
+    [Fact]
+    public void First_successful_snapshot_does_not_notify()
+    {
+        var notifications = new RecordingNotificationSink();
+
+        RunSession(new ControlledUsageSource(0), notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+
+            Assert.Empty(notifications.ResetStates);
+        });
+    }
+
+    [Fact]
+    public void Startup_reconciliation_notifies_when_the_saved_value_has_reset()
+    {
+        var notifications = new RecordingNotificationSink();
+        var savedState = new UsageState(
+            RemainingPercentage.From(47),
+            new DateTimeOffset(2026, 7, 31, 17, 30, 0, TimeSpan.Zero));
+
+        RunSession(new ControlledUsageSource(0), notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+
+            Assert.Equal(100, Assert.Single(notifications.ResetStates).Remaining.Value);
+        }, savedState);
+    }
+
+    [Fact]
+    public void Repeated_snapshot_does_not_notify_again()
+    {
+        var usageSource = new SequencedUsageSource(
+            () => Task.FromResult<double?>(53),
+            () => Task.FromResult<double?>(0),
+            () => Task.FromResult<double?>(0));
+        var notifications = new RecordingNotificationSink();
+
+        RunSession(usageSource, notifications, session =>
+        {
+            session.StartAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+            session.RefreshAsync().GetAwaiter().GetResult();
+
+            Assert.Single(notifications.ResetStates);
+        });
+    }
+
     private static void RunWindowSession(
         IUsageSource usageSource,
         Action<MainWindow, ApplicationSession, InMemoryUsageStateStore> assertion,
@@ -214,6 +317,25 @@ public sealed partial class ApplicationSessionAcceptanceTests
                 window.Close();
             }
         });
+    }
+
+    private static void RunSession(
+        IUsageSource usageSource,
+        RecordingNotificationSink notifications,
+        Action<ApplicationSession> assertion,
+        UsageState? initialState = null)
+    {
+        var stateStore = new InMemoryUsageStateStore { InitialState = initialState };
+        var adapters = new ApplicationSessionAdapters(
+            usageSource,
+            new ControlledClock(),
+            stateStore,
+            new ControlledDesktopState(),
+            notifications,
+            new RecordingWidgetShell());
+
+        using var session = new ApplicationSession(adapters);
+        assertion(session);
     }
 
     private sealed class ControlledUsageSource(double? usedPercentage) : IUsageSource
@@ -344,7 +466,9 @@ public sealed partial class ApplicationSessionAcceptanceTests
 
     private sealed class RecordingNotificationSink : INotificationSink
     {
-        public void ShowReset(UsageState state) { }
+        public List<UsageState> ResetStates { get; } = [];
+
+        public void ShowReset(UsageState state) => ResetStates.Add(state);
     }
 
     private sealed class RecordingWidgetShell : IWidgetShell

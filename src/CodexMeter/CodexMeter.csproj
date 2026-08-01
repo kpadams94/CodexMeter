@@ -2,5 +2,12 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\CodexMeterIcon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
