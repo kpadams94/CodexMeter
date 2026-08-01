@@ -9,6 +9,7 @@ public interface IDesktopWidget
 {
     double Width { get; }
     double Height { get; }
+    bool IsVisible { get; }
     void MoveTo(double left, double top);
     void SetTopmost();
     void Show();
@@ -64,7 +65,10 @@ public sealed class DesktopWidgetController : IDisposable
         }
 
         widget.SetTopmost();
-        widget.Show();
+        if (!widget.IsVisible)
+        {
+            widget.Show();
+        }
     }
 }
 

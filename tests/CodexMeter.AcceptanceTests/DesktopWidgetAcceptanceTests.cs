@@ -5,6 +5,20 @@ namespace CodexMeter.AcceptanceTests;
 public sealed class DesktopWidgetAcceptanceTests
 {
     [Fact]
+    public void Does_not_show_a_widget_that_the_application_has_already_shown()
+    {
+        var widget = new ControlledDesktopWidget(143, 49, isVisible: true);
+        var desktopState = new ControlledDesktopState();
+        var workArea = new ControlledPrimaryWorkArea(new DesktopWorkArea(0, 0, 1920, 1040));
+        using var controller = new DesktopWidgetController(widget, desktopState, workArea);
+
+        controller.Start();
+
+        Assert.True(widget.IsVisible);
+        Assert.Equal(0, widget.ShowCount);
+    }
+
+    [Fact]
     public void Anchors_above_the_primary_work_area_and_repositions_when_it_changes()
     {
         var widget = new ControlledDesktopWidget(143, 49);
@@ -44,7 +58,7 @@ public sealed class DesktopWidgetAcceptanceTests
         Assert.True(widget.IsTopmost);
     }
 
-    private sealed class ControlledDesktopWidget(double width, double height) : IDesktopWidget
+    private sealed class ControlledDesktopWidget(double width, double height, bool isVisible = false) : IDesktopWidget
     {
         public double Width { get; } = width;
 
@@ -52,7 +66,9 @@ public sealed class DesktopWidgetAcceptanceTests
 
         public (double Left, double Top) Position { get; private set; }
 
-        public bool IsVisible { get; private set; }
+        public bool IsVisible { get; private set; } = isVisible;
+
+        public int ShowCount { get; private set; }
 
         public bool IsTopmost { get; private set; }
 
@@ -60,7 +76,11 @@ public sealed class DesktopWidgetAcceptanceTests
 
         public void SetTopmost() => IsTopmost = true;
 
-        public void Show() => IsVisible = true;
+        public void Show()
+        {
+            IsVisible = true;
+            ShowCount++;
+        }
 
         public void Hide() => IsVisible = false;
     }
