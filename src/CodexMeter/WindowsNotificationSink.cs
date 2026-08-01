@@ -9,9 +9,10 @@ public sealed class WindowsNotificationSink : INotificationSink
         new ToastContentBuilder()
             .AddText("Weekly allowance reset")
             .AddText($"{state.Remaining.Value:0}% of your weekly Codex allowance remains.")
+            .SetBackgroundActivation()
             .AddAudio(new ToastAudio
             {
-                Src = new Uri("ms-winsoundevent:Notification.Silent"),
+                Silent = true,
             })
             .Show();
     }
