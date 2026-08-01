@@ -1,16 +1,21 @@
 using System.Windows;
 using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 
 namespace CodexMeter;
 
-public partial class MainWindow : Window, IWidgetShell
+public partial class MainWindow : Window, IWidgetShell, IDesktopWidget
 {
-    private const double WorkAreaInset = 12;
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x00000080L;
+    private const long WsExAppWindow = 0x00040000L;
+    private const long WsExNoActivate = 0x08000000L;
 
     public MainWindow()
     {
         InitializeComponent();
-        PlaceAboveTaskbar();
+        SourceInitialized += OnSourceInitialized;
     }
 
     public event Func<Task>? RefreshRequested;
@@ -46,10 +51,25 @@ public partial class MainWindow : Window, IWidgetShell
         }
     }
 
-    private void PlaceAboveTaskbar()
+    public void MoveTo(double left, double top)
     {
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Right - Width - WorkAreaInset;
-        Top = workArea.Bottom - Height - WorkAreaInset;
+        Left = left;
+        Top = top;
     }
+
+    public void SetTopmost() => Topmost = true;
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var style = GetWindowLongPtr(handle, GwlExStyle).ToInt64();
+        style = (style | WsExToolWindow | WsExNoActivate) & ~WsExAppWindow;
+        SetWindowLongPtr(handle, GwlExStyle, new IntPtr(style));
+    }
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr(IntPtr handle, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr handle, int index, IntPtr value);
 }
