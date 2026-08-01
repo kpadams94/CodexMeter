@@ -5,12 +5,12 @@ namespace CodexMeter;
 public sealed class WindowsAutomaticRefreshSchedule : IAutomaticRefreshSchedule, IDisposable
 {
     private static readonly TimeSpan Hour = TimeSpan.FromHours(1);
-    private readonly Timer timer;
+    private readonly System.Threading.Timer timer;
     private bool disposed;
 
     public WindowsAutomaticRefreshSchedule()
     {
-        timer = new Timer(OnTimerElapsed);
+        timer = new System.Threading.Timer(OnTimerElapsed);
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
     }
 

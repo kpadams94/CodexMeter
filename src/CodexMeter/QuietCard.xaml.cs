@@ -4,7 +4,7 @@ using System.Windows.Controls;
 
 namespace CodexMeter;
 
-public partial class QuietCard : UserControl
+public partial class QuietCard : System.Windows.Controls.UserControl
 {
     public static readonly DependencyProperty RemainingUsageProperty = DependencyProperty.Register(
         nameof(RemainingUsage),
