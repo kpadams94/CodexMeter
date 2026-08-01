@@ -15,9 +15,8 @@ public interface IDesktopWidget
     void Hide();
 }
 
-public interface IObservableDesktopState
+public interface IObservableDesktopState : IDesktopState
 {
-    bool IsFullScreen { get; }
     event Action? StateChanged;
 }
 
