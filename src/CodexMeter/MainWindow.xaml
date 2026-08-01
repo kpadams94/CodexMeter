@@ -16,6 +16,8 @@
     <Window.ContextMenu>
         <ContextMenu>
             <MenuItem Header="Refresh Now" Click="OnRefreshNowClick" />
+            <MenuItem Header="About" Click="OnAboutClick" />
+            <MenuItem Header="Exit" Click="OnExitClick" />
         </ContextMenu>
     </Window.ContextMenu>
     <local:QuietCard x:Name="Card" />

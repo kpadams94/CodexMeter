@@ -15,8 +15,9 @@ public sealed class TrayWidgetShell : IWidgetShell, IDisposable
     {
         icon = LoadIcon();
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("Refresh Now", null, OnRefreshNowClick);
-        menu.Items.Add("Exit", null, OnExitClick);
+        menu.Items.Add("Refresh Now", null, (_, _) => RequestCommand(WidgetCommand.Refresh));
+        menu.Items.Add("About", null, (_, _) => RequestCommand(WidgetCommand.About));
+        menu.Items.Add("Exit", null, (_, _) => RequestCommand(WidgetCommand.Exit));
 
         notifyIcon = new Forms.NotifyIcon
         {
@@ -27,9 +28,9 @@ public sealed class TrayWidgetShell : IWidgetShell, IDisposable
         };
     }
 
-    public event Func<Task>? RefreshRequested;
+    public event Func<WidgetCommand, Task>? CommandRequested;
 
-    public event Action? ExitRequested;
+    internal Forms.ContextMenuStrip CommandMenu => notifyIcon.ContextMenuStrip!;
 
     public void ShowChecking() => notifyIcon.Text = "Checking weekly Codex usage";
 
@@ -49,20 +50,8 @@ public sealed class TrayWidgetShell : IWidgetShell, IDisposable
         icon.Dispose();
     }
 
-    private async void OnRefreshNowClick(object? sender, EventArgs e)
-    {
-        if (RefreshRequested is null)
-        {
-            return;
-        }
-
-        foreach (var handler in RefreshRequested.GetInvocationList().Cast<Func<Task>>())
-        {
-            await handler();
-        }
-    }
-
-    private void OnExitClick(object? sender, EventArgs e) => ExitRequested?.Invoke();
+    private async void RequestCommand(WidgetCommand command) =>
+        await WidgetCommandDispatcher.RaiseAsync(CommandRequested, command);
 
     private static Icon LoadIcon()
     {

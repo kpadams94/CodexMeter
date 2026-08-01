@@ -18,7 +18,7 @@ public partial class MainWindow : Window, IWidgetShell, IDesktopWidget
         SourceInitialized += OnSourceInitialized;
     }
 
-    public event Func<Task>? RefreshRequested;
+    public event Func<WidgetCommand, Task>? CommandRequested;
 
     public void ShowChecking()
     {
@@ -33,23 +33,19 @@ public partial class MainWindow : Window, IWidgetShell, IDesktopWidget
     }
 
     private async void OnMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
-        await RaiseRefreshRequestedAsync();
+        await RaiseCommandRequestedAsync(WidgetCommand.Refresh);
 
     private async void OnRefreshNowClick(object sender, RoutedEventArgs e) =>
-        await RaiseRefreshRequestedAsync();
+        await RaiseCommandRequestedAsync(WidgetCommand.Refresh);
 
-    private async Task RaiseRefreshRequestedAsync()
-    {
-        if (RefreshRequested is null)
-        {
-            return;
-        }
+    private async void OnAboutClick(object sender, RoutedEventArgs e) =>
+        await RaiseCommandRequestedAsync(WidgetCommand.About);
 
-        foreach (Func<Task> handler in RefreshRequested.GetInvocationList())
-        {
-            await handler();
-        }
-    }
+    private async void OnExitClick(object sender, RoutedEventArgs e) =>
+        await RaiseCommandRequestedAsync(WidgetCommand.Exit);
+
+    private Task RaiseCommandRequestedAsync(WidgetCommand command) =>
+        WidgetCommandDispatcher.RaiseAsync(CommandRequested, command);
 
     public void MoveTo(double left, double top)
     {
